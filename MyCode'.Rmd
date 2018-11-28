@@ -1,0 +1,332 @@
+---
+title: "MyCode"
+author: "Abhishek Kelkar"
+date: "6 December 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+**Bank Marketing**
+
+We will first go through the process of exploratory data analytics on the given data set before pre-processing the data to identify the redundant variables (if any)
+
+```{r}
+library(effects)
+library(mosaic)
+setwd("C:\\Users\\Abhishek\\Desktop\\GyanData\\Bank Marketing")
+bank_m <- read.csv("bank-full-dataset.csv",stringsAsFactors = T)
+
+#Only for categorical variables
+#xtabs(~y + age, data=bank_m)
+tally(~y+marital, data=bank_m)
+tally(~y+marital, data=bank_m)
+tally(~y+contact:marital, data=bank_m)
+
+summary(bank_m)
+
+par(mfrow=c(3,2))
+hist(bank_m$duration, main = "Duration", xlim = c(0,2000))
+hist(bank_m$campaign, main = "Campaign", xlim = c(0,20))
+hist(bank_m$age, main = "Age")
+hist(bank_m$previous, main = "Previous")
+hist(bank_m$pdays, main = "pdays", xlim = c(0,400))
+hist(bank_m$balance, main = "Balance")
+hist(bank_m$day, main = "Day")
+
+bwplot(y~age,data = bank_m)
+dotplot(y~campaign,data = bank_m)
+
+```
+
+**LDA**
+```{r LDA}
+rm(list = ls())
+setwd("C:\\Users\\Abhishek\\Desktop\\GyanData\\Bank Marketing")
+
+#bank_m <- read.csv("bank-full-dataset.csv",stringsAsFactors = T)
+bank_m <- read.csv("bank-full-dataset-1.csv",stringsAsFactors = T)
+
+library(caret)
+library(class)
+library(MASS)
+library(ROCR)
+library(DMwR)
+
+
+test_train_sep <- createFolds(bank_m$y,k=10,list = T, returnTrain = F)
+
+ind =  1
+acc_mat = array()
+sen_mat = array()
+spe_mat = array()
+
+while(ind<=10){
+  print(ind)
+  testing_dataset = bank_m[-test_train_sep[[ind]],]
+  training_dataset = bank_m[test_train_sep[[ind]],]
+  training_dataset<-SMOTE(y~.,training_dataset,perc.over = 100,perc.under = 200)
+  lda_model <- lda(testing_dataset$y~.,testing_dataset)
+  lda_pred <- predict(lda_model,newdata = training_dataset)
+  CF = table(lda_pred$class,training_dataset$y)
+ 
+  acc_mat[ind] = sum(diag(CF))/nrow(training_dataset)
+  sen_mat[ind] = CF[1,1]/sum(CF[,1])
+  spe_mat[ind] = CF[2,2]/sum(CF[,2])
+  ind = ind+1
+}
+
+measures_df = cbind(acc_mat,sen_mat,spe_mat)
+colnames(measures_df)<- c("accuracy","sensitivity","specificity")
+print(measures_df)
+#write.csv(x = measures_df,"lda_results_10_fold.csv")
+
+
+## For the whole dataset
+
+lda_model_all <- lda(bank_m$y~.,bank_m)
+lda_pred_all <- predict(lda_model_all,newdata = bank_m)
+CF_all = table(lda_pred_all$class,bank_m$y)
+print(CF_all)
+acc_mat_all = sum(diag(CF_all))/nrow(bank_m)
+sen_mat_all = CF_all[1,1]/sum(CF_all[,1])
+spe_mat_all = CF_all[2,2]/sum(CF_all[,2])
+  
+one_model <- data.frame(x=cbind(acc_mat_all, sen_mat_all,spe_mat_all))
+
+pred <- prediction(lda_pred_all$posterior[,2],bank_m$y)
+perf <- performance(pred, "tpr", "fpr")
+pref2 <-performance(pred,"auc")
+plot(perf)
+#abline(a=0, b= 1)
+  
+colnames(one_model) <- c("accuracy","sensitivity","specificity")
+  
+#write.csv(x=CF_all,"lda_confusion_matrix.csv")
+#write.csv(x=one_model,"lda_one_model_measures.csv")
+
+```
+
+```{r LDA Refined Code}
+rm(list = ls())
+setwd("C:\\Users\\Abhishek\\Desktop\\GyanData\\Bank Marketing")
+
+bank_m <- read.csv("bank-full-dataset.csv",stringsAsFactors = T)
+bank_m[,c(1,6,12,13,14,15)] = apply((bank_m[,c(1,6,12,13,14,15)]),2,as.numeric)
+#bank_m <- data.frame(bank_m)
+
+library(caret)
+library(class)
+library(MASS)
+library(ROCR)
+
+test_train_sep <- createFolds(bank_m$y,k=10,list = T, returnTrain = F)
+
+ind =  1
+acc_mat = array()
+sen_mat = array()
+spe_mat = array()
+
+while(ind<=10){
+  print(ind)
+  testing_dataset = bank_m[-test_train_sep[[ind]],]
+  training_dataset = bank_m[test_train_sep[[ind]],]
+  lda_model <- lda(testing_dataset$y~.,testing_dataset)
+  lda_pred <- predict(lda_model,newdata = training_dataset)
+  CF = table(lda_pred$class,training_dataset$y)
+  
+  acc_mat[ind] = sum(diag(CF))/nrow(training_dataset)
+  sen_mat[ind] = CF[1,1]/sum(CF[,1])
+  spe_mat[ind] = CF[2,2]/sum(CF[,2])
+  ind = ind+1
+}
+
+measures_df = cbind(acc_mat,sen_mat,spe_mat)
+colnames(measures_df)<- c("accuracy","sensitivity","specificity")
+print(measures_df)
+write.csv(x = measures_df,"lda_results_10_fold.csv")
+
+
+## For the whole dataset
+
+lda_model_all <- lda(bank_m$y~.,bank_m)
+lda_pred_all <- predict(lda_model_all,newdata = bank_m)
+CF_all = table(lda_pred_all$class,bank_m$y)
+print(CF_all)
+acc_mat_all = sum(diag(CF_all))/nrow(bank_m)
+sen_mat_all = CF_all[1,1]/sum(CF_all[,1])
+spe_mat_all = CF_all[2,2]/sum(CF_all[,2])
+
+one_model <- data.frame(x=cbind(acc_mat_all,
+                                sen_mat_all,spe_mat_all))
+colnames(one_model) <- c("accuracy","sensitivity","specificity")
+
+pred <- prediction(lda_pred_all$posterior[,2],bank_m$y)
+perf <- performance(pred, "tpr", "fpr")
+pref2 <-performance(pred,"auc")
+plot(perf)
+abline(a=0, b= 1)
+
+
+write.csv(x=CF_all,"lda_confusion_matrix.csv")
+write.csv(x=one_model,"lda_one_model_measures.csv")
+```
+
+
+
+
+*Assumptions considered*
+*Multivariate Normal: Shapiro test
+*No/ little multi-colinearity: qq plot
+*HOmoskedasticity: BP Test
+*No AC of residuals
+
+```{r}
+rm(list = ls())
+setwd("C:\\Users\\Abhishek\\Desktop\\GyanData\\Bank Marketing")
+
+#bank_m <- read.csv("bank-full-dataset.csv",stringsAsFactors = T)
+#bank_m <- read.csv("bank-full-dataset-1.csv",stringsAsFactors = T)
+bank_m <- read.csv("bank-full-dataset-2.csv",stringsAsFactors = T)
+
+#Needs updation
+bank_m[,c(1,6,12,14,15)] = apply((bank_m[,c(1,6,12,14,15)]),2,as.numeric)
+bank_m <- data.frame(bank_m)
+
+library(caret)
+library(class)
+library(MASS)
+library(ROCR)
+
+
+
+test_train_sep <- createFolds(bank_m$y,k=10,list = T, returnTrain = F)
+
+ind =  1
+acc_mat = array()
+sen_mat = array()
+spe_mat = array()
+
+while(ind<=10){
+  print(ind)
+  testing_dataset = bank_m[-test_train_sep[[ind]],]
+  training_dataset = bank_m[test_train_sep[[ind]],]
+  training_dataset<-SMOTE(y~.,training_dataset,perc.over = 100,perc.under = 200)
+  qda_model <- qda(testing_dataset$y~.,testing_dataset)
+  qda_pred <- predict(qda_model,newdata = training_dataset)
+  CF = table(qda_pred$class,training_dataset$y)
+ 
+  acc_mat[ind] = sum(diag(CF))/nrow(training_dataset)
+  sen_mat[ind] = CF[1,1]/sum(CF[,1])
+  spe_mat[ind] = CF[2,2]/sum(CF[,2])
+  ind = ind+1
+}
+
+measures_df = cbind(acc_mat,sen_mat,spe_mat)
+colnames(measures_df)<- c("accuracy","sensitivity","specificity")
+print(measures_df)
+#write.csv(x = measures_df,"qda_results_10_fold.csv")
+
+
+## For the whole dataset
+
+qda_model_all <- qda(bank_m$y~.,bank_m)
+qda_pred_all <- predict(qda_model_all,newdata = bank_m)
+CF_all = table(qda_pred_all$class,bank_m$y)
+print(CF_all)
+acc_mat_all = sum(diag(CF_all))/nrow(bank_m)
+print(acc_mat_all)
+sen_mat_all = CF_all[1,1]/sum(CF_all[,1])
+spe_mat_all = CF_all[2,2]/sum(CF_all[,2])
+  
+one_model <- data.frame(x=cbind(acc_mat_all, sen_mat_all,spe_mat_all))
+colnames(one_model) <- c("accuracy","sensitivity","specificity")
+  
+#pred <- prediction(qda_pred_all$posterior[,2],bank_m$y)
+#perf <- performance(pred, "tpr", "fpr")
+#pref2 <-performance(pred,"auc")
+#plot(perf)
+#abline(a=0, b= 1)
+  
+write.csv(x=CF_all,"qda_confusion_matrix.csv")
+write.csv(x=one_model,"qda_one_model_measures.csv")
+```
+
+*Random Forest*
+```{r}
+rm(list = ls())
+setwd("C:\\Users\\Abhishek\\Desktop\\GyanData\\Bank Marketing")
+
+
+library(caret)
+library(class)
+library(MASS)
+library(randomForest)
+library(ROCR)
+
+bank_m <- read.csv("bank-full-dataset.csv",stringsAsFactors = T)
+bank_m[,c(1,6,12,13,14,15)] = apply((bank_m[,c(1,6,12,13,14,15)]),2,as.numeric)
+
+test_train_sep <- createFolds(bank_m$y,k=10,list = T, returnTrain = F)
+ind =  1
+acc_mat = array()
+sen_mat = array()
+spe_mat = array()
+
+while(ind<=10){
+  print(ind)
+  testing_dataset = bank_m[-test_train_sep[[ind]],]
+  training_dataset = bank_m[test_train_sep[[ind]],]
+  #training_dataset<-SMOTE(y~.,training_dataset,perc.over = 100,perc.under = 200)
+  RF_model <- randomForest(y=testing_dataset$y,x=testing_dataset[,-17],ntree = 200)
+  plot(RF_model)
+  RF_pred <- predict(RF_model,newdata = training_dataset)
+  CF = table(RF_pred,training_dataset$y)
+  
+ 
+  acc_mat[ind] = sum(diag(CF))/nrow(training_dataset)
+  
+  sen_mat[ind] = CF[1,1]/sum(CF[,1])
+ 
+  spe_mat[ind] = CF[2,2]/sum(CF[,2])
+  
+  ind = ind+1
+}
+
+measures_df = cbind(acc_mat,sen_mat,spe_mat)
+colnames(measures_df)<- c("accuracy","sensitivity","specificity")
+print(measures_df)
+write.csv(x = measures_df,"RF_results_10_fold.csv")
+
+
+## For the whole dataset
+
+RF_model_all <- randomForest(y=bank_m$y,bank_m[,-17])
+RF_pred_all <- predict(RF_model_all,newdata = bank_m)
+CF_all = table(RF_pred_all,bank_m$y)
+print(CF_all)
+acc_mat_all = sum(diag(CF_all))/nrow(bank_m)
+sen_mat_all = CF_all[1,1]/sum(CF_all[,1])
+spe_mat_all = CF_all[2,2]/sum(CF_all[,2])
+
+one_model <- data.frame(x=cbind(acc_mat_all, sen_mat_all,spe_mat_all))
+colnames(one_model) <- c("accuracy","sensitivity","specificity")
+  
+RF_pred_prob <- predict(RF_model_all,newdata = bank_m,type="prob")  
+pred <- prediction(RF_pred_prob[,2],bank_m$y)
+perf <- performance(pred, "tpr", "fpr")
+pref2 <-performance(pred,"auc")
+plot(perf)
+#abline(a=0, b= 1)
+  
+write.csv(x=RF_model_all$importance,"RandomForest_variable_importance.csv")
+write.csv(x=CF_all,"RF_confusion_matrix.csv")
+write.csv(x=one_model,"RF_one_model_measures.csv")
+  
+```
+
+

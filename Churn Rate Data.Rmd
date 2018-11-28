@@ -1,0 +1,92 @@
+---
+title: "Churn Rate Data"
+author: "Abhishek Kelkar"
+date: "20 December 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list = ls())
+setwd("C:\\Users\\Abhishek\\Desktop\\GyanData\\Churn Prediction")
+
+
+library(caret)
+library(class)
+library(MASS)
+library(randomForest)
+library(ROCR)
+
+
+churn <- read.csv("xyz.csv")
+
+sapply(churn, function(x) sum(is.na(x)))
+which(is.na(churn$TotalCharges))
+
+churn <- churn[-c(489,754,937,1083,1341,3332,3827,4381,5219,6671,6755), ]
+str(churn)
+
+
+test_train_sep <- createFolds(churn$Churn,k=10,list = T, returnTrain = F)
+ind =  1
+acc_mat = array()
+sen_mat = array()
+spe_mat = array()
+
+while(ind<=10){
+  print(ind)
+  testing_dataset = churn[-test_train_sep[[ind]],]
+  training_dataset = churn[test_train_sep[[ind]],]
+  RF_model <- randomForest(y=testing_dataset$Churn,x=testing_dataset[,-17],ntree = 200, keep.forest = TRUE)
+  #plot(RF_model)
+  RF_pred <- predict(RF_model,newdata = training_dataset)
+  CF = table(RF_pred,training_dataset$y)
+  
+ 
+  acc_mat[ind] = sum(diag(CF))/nrow(training_dataset)
+  
+  sen_mat[ind] = CF[1,1]/sum(CF[,1])
+ 
+  spe_mat[ind] = CF[2,2]/sum(CF[,2])
+  
+  ind = ind+1
+}
+
+measures_df = cbind(acc_mat,sen_mat,spe_mat)
+colnames(measures_df)<- c("accuracy","sensitivity","specificity")
+print(measures_df)
+
+write.csv(x = measures_df,"RF_results_10_fold.csv")
+
+
+## For the whole dataset
+
+
+RF_model_all <- randomForest(y=churn$Churn,churn[,-21])
+RF_pred_all <- predict(RF_model_all,newdata = churn)
+CF_all = table(RF_pred_all,churn$Churn)
+print(CF_all)
+acc_mat_all = sum(diag(CF_all))/nrow(churn)
+sen_mat_all = CF_all[1,1]/sum(CF_all[,1])
+spe_mat_all = CF_all[2,2]/sum(CF_all[,2])
+
+one_model <- data.frame(x=cbind(acc_mat_all, sen_mat_all,spe_mat_all))
+colnames(one_model) <- c("accuracy","sensitivity","specificity")
+  
+RF_pred_prob <- predict(RF_model_all,newdata = churn,type="prob")  
+pred <- prediction(RF_pred_prob[,2],churn$y)
+perf <- performance(pred, "tpr", "fpr")
+pref2 <-performance(pred,"auc")
+plot(perf)
+#abline(a=0, b= 1)
+  
+write.csv(x=RF_model_all$importance,"RandomForest_variable_importance.csv")
+write.csv(x=CF_all,"RF_confusion_matrix.csv")
+write.csv(x=one_model,"RF_one_model_measures.csv")
+
+
+```
+
